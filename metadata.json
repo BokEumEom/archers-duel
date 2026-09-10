@@ -1,0 +1,6 @@
+{
+  "name": "Archer's Duel: GBA Edition",
+  "description": "Turn-based medieval archer bow duel for Game Boy Advance with angle, power, wind, headshots, and downloadable .gba ROM.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
