@@ -147,3 +147,36 @@ export function checkArrowCollision(
     damage: 0,
   };
 }
+
+/**
+ * Calculate preview trajectory arc points for slingshot gesture aiming (like Angry Birds)
+ */
+export function getTrajectoryPreviewPoints(
+  originX: number,
+  originY: number,
+  angleDeg: number,
+  powerPercent: number,
+  wind: WindState,
+  steps: number = 9,
+  subSteps: number = 2
+): { x: number; y: number }[] {
+  const rad = (angleDeg * Math.PI) / 180;
+  const speed = 2.5 + (powerPercent / 100) * 8.2;
+  let vx = Math.cos(rad) * speed;
+  let vy = -Math.sin(rad) * speed;
+  let x = originX;
+  let y = originY;
+
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i < steps; i++) {
+    for (let s = 0; s < subSteps; s++) {
+      vx += wind.speed * WIND_FACTOR;
+      vy += GRAVITY;
+      x += vx;
+      y += vy;
+    }
+    if (y > 112) break; // Don't extend underground
+    points.push({ x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 });
+  }
+  return points;
+}

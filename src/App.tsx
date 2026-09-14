@@ -26,8 +26,10 @@ import { enemyAi } from './game/ai';
 import autumnOakLeafImg from './assets/images/autumn_oak_leaf_1788932580849.jpg';
 
 export default function App() {
-  // Game Lifecycle State
-  const [gameState, setGameState] = useState<GameState>('TITLE');
+  // Game Lifecycle State (Starts with authentic GBA cold boot sequence)
+  const [gameState, setGameState] = useState<GameState>('BOOT');
+  const [bootTarget, setBootTarget] = useState<GameState>('TITLE');
+  const [isRestartBoot, setIsRestartBoot] = useState<boolean>(false);
   const [difficulty, setDifficulty] = useState<Difficulty>('MARKSMAN');
   const [turn, setTurn] = useState<'PLAYER' | 'ENEMY'>('PLAYER');
 
@@ -212,6 +214,20 @@ export default function App() {
     gbaAudio.playMenuBeep();
   }, [generateNewWind]);
 
+  // Complete GBA boot sequence and transition to target
+  const handleBootComplete = useCallback(() => {
+    setGameState(bootTarget);
+  }, [bootTarget]);
+
+  // Restart match with authentic GBA boot sequence
+  const handleRestart = useCallback(() => {
+    startNewMatch();
+    setIsRestartBoot(true);
+    setBootTarget('BATTLE');
+    setGameState('BOOT');
+    gbaAudio.playMenuBeep();
+  }, [startNewMatch]);
+
   // Start next round in best-of-three (New distance & new consistent wind)
   const startNextRound = useCallback(() => {
     const newEnemyX = Math.round(420 + Math.random() * 70);
@@ -276,7 +292,7 @@ export default function App() {
     setParticles((prev) => [...prev, ...newParticles]);
   }, []);
 
-  // Handle Player Shot Action
+  // Handle Player Shot Action (D-Pad / Button A)
   const handlePlayerShoot = useCallback(() => {
     if (gameState !== 'BATTLE' || turn !== 'PLAYER' || arrow !== null || isScouting) return;
 
@@ -294,6 +310,55 @@ export default function App() {
       setStats((prev) => ({ ...prev, playerShots: prev.playerShots + 1 }));
     }, 280);
   }, [gameState, turn, arrow, isScouting, player.x, player.y, player.angle, player.power]);
+
+  // Mobile Gesture Slingshot Shot Action (Angry Birds style immediate release)
+  const handleGestureShoot = useCallback(
+    (gestureAngle: number, gesturePower: number) => {
+      if (gameState !== 'BATTLE' || turn !== 'PLAYER' || arrow !== null || isScouting) return;
+
+      // Update archer state and release arrow immediately
+      setPlayer((prev) => ({
+        ...prev,
+        angle: gestureAngle,
+        power: gesturePower,
+        pose: 'RELEASE',
+        poseTimer: 20,
+      }));
+      gbaAudio.playArrowRelease();
+
+      const newArrow = spawnArrow('PLAYER', player.x + 8, player.y - 14, gestureAngle, gesturePower);
+      setArrow(newArrow);
+      setStats((prev) => ({ ...prev, playerShots: prev.playerShots + 1 }));
+    },
+    [gameState, turn, arrow, isScouting, player.x, player.y]
+  );
+
+  // Gesture Aiming Start (Plays bowstring tension sound)
+  const handleAimStart = useCallback(() => {
+    if (gameState !== 'BATTLE' || turn !== 'PLAYER' || arrow !== null || isScouting) return;
+    gbaAudio.playBowDraw();
+    setPlayer((prev) => ({ ...prev, pose: 'DRAW', poseTimer: 25 }));
+  }, [gameState, turn, arrow, isScouting]);
+
+  // Real-time Gesture Aim Update
+  const handleAimChange = useCallback((newAngle: number, newPower: number) => {
+    setPlayer((prev) => ({
+      ...prev,
+      angle: newAngle,
+      power: newPower,
+      pose: 'DRAW',
+      poseTimer: 25,
+    }));
+  }, []);
+
+  // Gesture Cancel (returns archer to idle stance)
+  const handleAimCancel = useCallback(() => {
+    setPlayer((prev) => ({
+      ...prev,
+      pose: 'IDLE',
+      poseTimer: 0,
+    }));
+  }, []);
 
   // Handle Enemy Turn automatically when it is ENEMY turn and no arrow is active
   useEffect(() => {
@@ -646,6 +711,14 @@ export default function App() {
   // Handle Hardware Button Press
   const handleButtonPress = useCallback(
     (btn: 'UP' | 'DOWN' | 'LEFT' | 'RIGHT' | 'A' | 'B' | 'START' | 'SELECT' | 'L' | 'R') => {
+      // 0. BOOT SCREEN
+      if (gameState === 'BOOT') {
+        if (btn === 'A' || btn === 'START') {
+          handleBootComplete();
+        }
+        return;
+      }
+
       // 1. TITLE SCREEN
       if (gameState === 'TITLE') {
         if (btn === 'A' || btn === 'START') {
@@ -706,8 +779,8 @@ export default function App() {
             // Resume
             setGameState('BATTLE');
           } else if (pauseMenuIndex === 1) {
-            // Restart Match
-            startNewMatch();
+            // Restart Match with GBA boot sequence
+            handleRestart();
           } else if (pauseMenuIndex === 2) {
             // Cycle Difficulty
             setDifficulty((prev) => {
@@ -919,6 +992,7 @@ export default function App() {
         onToggleViewMode={() => setViewMode((prev) => (prev === 'CONSOLE' ? 'THEATER' : 'CONSOLE'))}
         screenScale={screenScale}
         onCycleScreenScale={handleCycleScreenScale}
+        onRestart={handleRestart}
       >
         <GbaScreen
           gameState={gameState}
@@ -943,8 +1017,16 @@ export default function App() {
           playerCustomImage={playerCustomImage}
           enemyCustomImage={enemyCustomImage}
           screenScale={screenScale}
+          onGestureShoot={handleGestureShoot}
+          onAimStart={handleAimStart}
+          onAimChange={handleAimChange}
+          onAimCancel={handleAimCancel}
+          onBootComplete={handleBootComplete}
+          isRestartBoot={isRestartBoot}
           onCanvasClick={() => {
-            if (gameState === 'TITLE' || gameState === 'INSTRUCTIONS' || gameState === 'ROUND_OVER' || gameState === 'MATCH_OVER') {
+            if (gameState === 'BOOT') {
+              handleBootComplete();
+            } else if (gameState === 'TITLE' || gameState === 'INSTRUCTIONS' || gameState === 'ROUND_OVER' || gameState === 'MATCH_OVER') {
               handleButtonPress('A');
             }
           }}

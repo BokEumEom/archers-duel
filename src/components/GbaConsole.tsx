@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
-import { Download, Volume2, VolumeX, Sparkles, Monitor, Tv, Gamepad2, Eye, Maximize2 } from 'lucide-react';
+import { Download, Volume2, VolumeX, Sparkles, Monitor, Tv, Gamepad2, Eye, Maximize2, RotateCcw } from 'lucide-react';
 import { downloadGbaRom } from '../gba/romBuilder';
 import { ScreenScale } from '../types';
 
@@ -18,6 +18,7 @@ interface GbaConsoleProps {
   onToggleViewMode?: () => void;
   screenScale?: ScreenScale;
   onCycleScreenScale?: () => void;
+  onRestart?: () => void;
 }
 
 export const GbaConsole: React.FC<GbaConsoleProps> = ({
@@ -35,6 +36,7 @@ export const GbaConsole: React.FC<GbaConsoleProps> = ({
   onToggleViewMode,
   screenScale = 'AUTO',
   onCycleScreenScale,
+  onRestart,
 }) => {
   const repeatTimeoutRef = useRef<number | null>(null);
   const repeatIntervalRef = useRef<number | null>(null);
@@ -193,6 +195,18 @@ export const GbaConsole: React.FC<GbaConsoleProps> = ({
           <Sparkles className="h-3.5 w-3.5 text-amber-300" />
           <span>Sprite Fusion {hasCustomSprites && '• Active'}</span>
         </button>
+
+        {onRestart && (
+          <button
+            onClick={onRestart}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-stone-800 px-2.5 py-1.5 sm:px-3 sm:py-2 text-[11px] sm:text-xs font-semibold text-stone-300 shadow-sm transition-all hover:bg-stone-700 active:scale-95 touch-manipulation"
+            id="btn-restart-console"
+            title="Restart GBA console with authentic boot sequence"
+          >
+            <RotateCcw className="h-3.5 w-3.5 text-amber-400" />
+            <span>Restart</span>
+          </button>
+        )}
       </div>
 
       {/* VIEW MODE 1: CLASSIC RETRO GBA CONSOLE SHELL */}
@@ -315,7 +329,7 @@ export const GbaConsole: React.FC<GbaConsoleProps> = ({
                 <div className="absolute top-8 sm:top-9 lg:top-10 left-8 sm:left-9 lg:left-10 h-8 w-8 sm:h-10 sm:w-10 lg:h-12 lg:w-12 bg-[#1e272e]" />
               </div>
               <span className="mt-1 text-[8px] sm:text-[9px] lg:text-[11px] font-bold tracking-wider text-stone-400">
-                AIM & POWER
+                D-PAD (FINE TUNE)
               </span>
             </div>
 
@@ -499,8 +513,12 @@ export const GbaConsole: React.FC<GbaConsoleProps> = ({
 
       {/* Responsive Help Footer: Desktop Keyboard Reference vs Mobile Touch Tips */}
       <div className={`mt-3 sm:mt-4 w-full px-2 text-stone-400 transition-all duration-200 ${ribbonMaxWidth}`}>
-        {/* Desktop Keyboard Shortcuts (visible sm and up) */}
+        {/* Desktop Keyboard Shortcuts & Mouse Gesture (visible sm and up) */}
         <div className="hidden sm:flex flex-wrap items-center justify-center gap-3 md:gap-4 text-xs">
+          <div className="flex items-center gap-1.5 text-amber-300 font-bold">
+            <span className="rounded bg-amber-500/20 px-1.5 py-0.5 font-mono text-[10px] border border-amber-500/40">Drag Screen</span>
+            <span>Pull to Aim & Shoot</span>
+          </div>
           <div className="flex items-center gap-1.5">
             <kbd className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-200">▲ ▼</kbd>
             <span>Angle</span>
@@ -518,10 +536,6 @@ export const GbaConsole: React.FC<GbaConsoleProps> = ({
             <span className="font-semibold text-pink-400">Shoot (A)</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <kbd className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-200">X</kbd>
-            <span>Back (B)</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <kbd className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-200">Enter</kbd>
             <span>Pause</span>
           </div>
@@ -530,22 +544,18 @@ export const GbaConsole: React.FC<GbaConsoleProps> = ({
             <span>View</span>
           </div>
           <div className="flex items-center gap-1.5">
-            <kbd className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-200">C</kbd>
-            <span>Scale ({screenScale === 'AUTO' ? 'Auto' : screenScale})</span>
-          </div>
-          <div className="flex items-center gap-1.5">
             <kbd className="rounded bg-stone-800 px-1.5 py-0.5 font-mono text-[10px] text-stone-200">M</kbd>
             <span>Mute</span>
           </div>
         </div>
 
-        {/* Mobile Touch Quick Guide (visible only on mobile) */}
-        <div className="flex sm:hidden items-center justify-around rounded-lg border border-stone-800/60 bg-stone-900/40 p-2 text-[10px] text-stone-400">
-          <span>📱 <b>Hold D-Pad</b> aim/power</span>
+        {/* Mobile Touch Quick Guide (visible on mobile) */}
+        <div className="flex sm:hidden items-center justify-around rounded-lg border border-amber-500/30 bg-stone-900/60 p-2 text-[10px] text-stone-300">
+          <span className="text-amber-300 font-bold">🏹 화면 당겨서 조준 & 발사</span>
           <span>•</span>
-          <span>👁️ <b>Hold R</b> scout</span>
+          <span>👁️ <b>R</b> 정찰</span>
           <span>•</span>
-          <span>🎯 <b>Tap A</b> fire</span>
+          <span>🎯 <b>A</b> 발사</span>
         </div>
       </div>
     </div>

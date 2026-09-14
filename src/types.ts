@@ -1,4 +1,5 @@
 export type GameState = 
+  | 'BOOT'
   | 'TITLE'
   | 'INSTRUCTIONS'
   | 'BATTLE'

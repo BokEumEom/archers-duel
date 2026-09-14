@@ -263,6 +263,84 @@ class GbaAudioEngine {
       t += note.d * 0.95;
     });
   }
+
+  /**
+   * Sound 9: Iconic Game Boy Advance Boot Arpeggio & Crystal Chime ("Bling!")
+   */
+  public playBootChime() {
+    if (this.isMuted) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    try {
+      const t = this.ctx.currentTime;
+
+      // 1. Initial ascending arpeggio sweep as the GBA logo drops down
+      const arpNotes = [
+        { f: 349.23, delay: 0.0, dur: 0.1 },  // F4
+        { f: 440.0, delay: 0.06, dur: 0.1 },  // A4
+        { f: 523.25, delay: 0.12, dur: 0.1 }, // C5
+        { f: 698.46, delay: 0.18, dur: 0.1 }, // F5
+        { f: 880.0, delay: 0.24, dur: 0.1 },  // A5
+        { f: 1046.5, delay: 0.30, dur: 0.12 } // C6
+      ];
+
+      arpNotes.forEach(({ f, delay, dur }) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(f, t + delay);
+
+        gain.gain.setValueAtTime(0.04, t + delay);
+        gain.gain.exponentialRampToValueAtTime(0.001, t + delay + dur);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(t + delay);
+        osc.stop(t + delay + dur);
+      });
+
+      // 2. The famous GBA signature crystal double-chime at ~0.68s
+      const chimeTime = t + 0.68;
+
+      // Bell Fundamental (C7 - 2093 Hz)
+      const bell1 = this.ctx.createOscillator();
+      const bellGain1 = this.ctx.createGain();
+      bell1.type = 'sine';
+      bell1.frequency.setValueAtTime(2093.0, chimeTime);
+      bellGain1.gain.setValueAtTime(0.25, chimeTime);
+      bellGain1.gain.exponentialRampToValueAtTime(0.0005, chimeTime + 1.25);
+      bell1.connect(bellGain1);
+      bellGain1.connect(this.ctx.destination);
+      bell1.start(chimeTime);
+      bell1.stop(chimeTime + 1.25);
+
+      // Bell Harmonic sparkle (G7 - 3135.96 Hz)
+      const bell2 = this.ctx.createOscillator();
+      const bellGain2 = this.ctx.createGain();
+      bell2.type = 'sine';
+      bell2.frequency.setValueAtTime(3135.96, chimeTime + 0.02);
+      bellGain2.gain.setValueAtTime(0.18, chimeTime + 0.02);
+      bellGain2.gain.exponentialRampToValueAtTime(0.0005, chimeTime + 0.95);
+      bell2.connect(bellGain2);
+      bellGain2.connect(this.ctx.destination);
+      bell2.start(chimeTime + 0.02);
+      bell2.stop(chimeTime + 0.95);
+
+      // Warm retro body resonance (C6 / E6 chime)
+      const bell3 = this.ctx.createOscillator();
+      const bellGain3 = this.ctx.createGain();
+      bell3.type = 'triangle';
+      bell3.frequency.setValueAtTime(1318.51, chimeTime); // E6
+      bellGain3.gain.setValueAtTime(0.12, chimeTime);
+      bellGain3.gain.exponentialRampToValueAtTime(0.0005, chimeTime + 0.7);
+      bell3.connect(bellGain3);
+      bellGain3.connect(this.ctx.destination);
+      bell3.start(chimeTime);
+      bell3.stop(chimeTime + 0.7);
+    } catch (_) {}
+  }
 }
 
 export const gbaAudio = new GbaAudioEngine();
