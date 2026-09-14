@@ -15,6 +15,7 @@ import {
   Particle,
   SpriteFusionAsset,
   EnemyDesignId,
+  ScreenScale,
 } from './types';
 import { GbaScreen } from './components/GbaScreen';
 import { GbaConsole } from './components/GbaConsole';
@@ -113,6 +114,26 @@ export default function App() {
   const [crtFilter, setCrtFilter] = useState<boolean>(true);
   const [soundMuted, setSoundMuted] = useState<boolean>(false);
   const [isSpriteFusionOpen, setIsSpriteFusionOpen] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'CONSOLE' | 'THEATER'>('CONSOLE');
+  const [screenScale, setScreenScale] = useState<ScreenScale>('AUTO');
+
+  const handleCycleScreenScale = useCallback(() => {
+    setScreenScale((curr) => {
+      switch (curr) {
+        case 'AUTO':
+          return '2X';
+        case '2X':
+          return '3X';
+        case '3X':
+          return '4X';
+        case '4X':
+          return 'AUTO';
+        default:
+          return 'AUTO';
+      }
+    });
+    gbaAudio.playMenuBeep();
+  }, []);
 
   // Custom Generated Artwork from Sprite Fusion
   const [playerCustomImage, setPlayerCustomImage] = useState<HTMLImageElement | null>(null);
@@ -274,47 +295,55 @@ export default function App() {
     }, 280);
   }, [gameState, turn, arrow, isScouting, player.x, player.y, player.angle, player.power]);
 
-  // Handle Enemy Turn
-  const executeEnemyTurn = useCallback(() => {
+  // Handle Enemy Turn automatically when it is ENEMY turn and no arrow is active
+  useEffect(() => {
     if (gameState !== 'BATTLE' || turn !== 'ENEMY' || arrow !== null) return;
 
-    // AI thinking delay
-    setTimeout(() => {
-      // Calculate shot with believable human error calibrated for long distance
-      const decision = enemyAi.calculateShot(
-        enemy.x,
-        enemy.y,
-        player.x,
-        player.y,
-        wind,
-        difficulty
-      );
+    // AI thinking delay (smooth pan to enemy, stance, and aiming)
+    const thinkTimer = setTimeout(() => {
+      // Double check game still active and enemy turn
+      setTurn((currentTurn) => {
+        if (currentTurn !== 'ENEMY') return currentTurn;
 
-      setEnemy((prev) => ({
-        ...prev,
-        angle: decision.targetAngle,
-        power: decision.targetPower,
-        pose: 'DRAW',
-        poseTimer: 20,
-      }));
-      gbaAudio.playBowDraw();
-
-      // Release arrow
-      setTimeout(() => {
-        setEnemy((prev) => ({ ...prev, pose: 'RELEASE', poseTimer: 20 }));
-        gbaAudio.playArrowRelease();
-
-        const enemyArrow = spawnArrow(
-          'ENEMY',
-          enemy.x - 8,
-          enemy.y - 14,
-          decision.targetAngle,
-          decision.targetPower
+        const decision = enemyAi.calculateShot(
+          enemy.x,
+          enemy.y,
+          player.x,
+          player.y,
+          wind,
+          difficulty
         );
-        setArrow(enemyArrow);
-        setStats((prev) => ({ ...prev, enemyShots: prev.enemyShots + 1 }));
-      }, 350);
-    }, 600);
+
+        setEnemy((prev) => ({
+          ...prev,
+          angle: decision.targetAngle,
+          power: decision.targetPower,
+          pose: 'DRAW',
+          poseTimer: 20,
+        }));
+        gbaAudio.playBowDraw();
+
+        // Release arrow after short drawing animation
+        setTimeout(() => {
+          setEnemy((prev) => ({ ...prev, pose: 'RELEASE', poseTimer: 20 }));
+          gbaAudio.playArrowRelease();
+
+          const enemyArrow = spawnArrow(
+            'ENEMY',
+            enemy.x - 8,
+            enemy.y - 14,
+            decision.targetAngle,
+            decision.targetPower
+          );
+          setArrow(enemyArrow);
+          setStats((prev) => ({ ...prev, enemyShots: prev.enemyShots + 1 }));
+        }, 380);
+
+        return currentTurn;
+      });
+    }, 700);
+
+    return () => clearTimeout(thinkTimer);
   }, [gameState, turn, arrow, enemy.x, enemy.y, player.x, player.y, wind, difficulty]);
 
   // Main 60FPS Physics, Camera, and Animation Loop
@@ -472,7 +501,6 @@ export default function App() {
                   setBannerText(null);
                   targetCameraX.current = Math.max(0, enemy.x - 170);
                   targetCameraY.current = 0;
-                  executeEnemyTurn();
                 }
                 return currEnemy;
               });
@@ -559,7 +587,6 @@ export default function App() {
                 setTurn('ENEMY');
                 targetCameraX.current = Math.max(0, enemy.x - 170);
                 targetCameraY.current = 0;
-                executeEnemyTurn();
               } else {
                 // Pass to Player (WIND REMAINS CONSISTENT)
                 setTurn('PLAYER');
@@ -613,7 +640,6 @@ export default function App() {
     isScouting,
     turn,
     arrow,
-    executeEnemyTurn,
     spawnParticlesAt,
   ]);
 
@@ -828,6 +854,18 @@ export default function App() {
         case 'Tab':
           handleButtonPress('SELECT');
           break;
+        case 'v':
+        case 'V':
+          setViewMode((prev) => (prev === 'CONSOLE' ? 'THEATER' : 'CONSOLE'));
+          break;
+        case 'c':
+        case 'C':
+          handleCycleScreenScale();
+          break;
+        case 'm':
+        case 'M':
+          setSoundMuted(() => gbaAudio.toggleMute());
+          break;
         default:
           break;
       }
@@ -862,8 +900,8 @@ export default function App() {
   };
 
   return (
-    <div className="flex min-h-screen flex-col items-center justify-center bg-[#12161f] px-3 py-6 font-sans text-stone-100 antialiased selection:bg-amber-500 selection:text-black">
-      {/* Handheld GBA Console */}
+    <div className="flex min-h-screen w-full flex-col items-center justify-center overflow-x-hidden bg-[#12161f] px-2 py-2.5 sm:px-4 sm:py-6 font-sans text-stone-100 antialiased selection:bg-amber-500 selection:text-black">
+      {/* Handheld GBA Console / Theater Controller */}
       <GbaConsole
         onPressButton={handleButtonPress}
         onReleaseButton={handleButtonRelease}
@@ -877,6 +915,10 @@ export default function App() {
         }}
         onOpenSpriteFusion={() => setIsSpriteFusionOpen(true)}
         hasCustomSprites={playerCustomImage !== null || enemyCustomImage !== null}
+        viewMode={viewMode}
+        onToggleViewMode={() => setViewMode((prev) => (prev === 'CONSOLE' ? 'THEATER' : 'CONSOLE'))}
+        screenScale={screenScale}
+        onCycleScreenScale={handleCycleScreenScale}
       >
         <GbaScreen
           gameState={gameState}
@@ -900,6 +942,7 @@ export default function App() {
           roundIntroNotice={roundIntroNotice}
           playerCustomImage={playerCustomImage}
           enemyCustomImage={enemyCustomImage}
+          screenScale={screenScale}
           onCanvasClick={() => {
             if (gameState === 'TITLE' || gameState === 'INSTRUCTIONS' || gameState === 'ROUND_OVER' || gameState === 'MATCH_OVER') {
               handleButtonPress('A');

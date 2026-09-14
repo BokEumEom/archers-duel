@@ -73,6 +73,8 @@ export interface MatchStats {
   enemyHeadshots: number;
 }
 
+export type ScreenScale = 'AUTO' | '2X' | '3X' | '4X';
+
 export interface Particle {
   x: number;
   y: number;

@@ -219,31 +219,31 @@ export const SpriteFusionPanel: React.FC<SpriteFusionPanelProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4 backdrop-blur-sm">
-      <div className="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-2xl border border-stone-700 bg-stone-900 p-6 text-stone-100 shadow-2xl">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-stone-800 pb-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400">
-              <Sparkles className="h-5 w-5" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-2 sm:p-4 backdrop-blur-sm">
+      <div className="relative max-h-[92vh] w-full max-w-2xl overflow-y-auto rounded-xl sm:rounded-2xl border border-stone-700 bg-stone-900 p-3.5 sm:p-6 text-stone-100 shadow-2xl">
+        {/* Sticky Header with Quick Close */}
+        <div className="sticky top-0 z-20 -mx-3.5 -mt-3.5 sm:-mx-6 sm:-mt-6 flex items-center justify-between border-b border-stone-800 bg-stone-900/95 px-3.5 py-3 sm:px-6 sm:py-4 backdrop-blur-sm rounded-t-xl sm:rounded-t-2xl">
+          <div className="flex items-center gap-2.5 sm:gap-3">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-indigo-600/20 text-indigo-400">
+              <Sparkles className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold tracking-tight text-white">Sprite Fusion Art Studio</h2>
-              <p className="text-xs text-stone-400">
+              <h2 className="text-base sm:text-lg font-bold tracking-tight text-white">Sprite Fusion Art Studio</h2>
+              <p className="text-[10px] sm:text-xs text-stone-400">
                 Official API integration for medieval pixel art generation
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-800 hover:text-white"
+            className="rounded-lg p-2 text-stone-400 transition-colors hover:bg-stone-800 hover:text-white touch-manipulation"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
         {/* API Key & Credit Status Banner */}
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-stone-800 bg-stone-950/60 p-3 text-xs">
+        <div className="mt-3.5 sm:mt-4 flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 rounded-xl border border-stone-800 bg-stone-950/60 p-2.5 sm:p-3 text-[11px] sm:text-xs">
           <div className="flex items-center gap-2">
             <span className={`h-2.5 w-2.5 rounded-full ${hasKey ? 'bg-emerald-400 shadow-[0_0_8px_#34d399]' : 'bg-amber-400'}`} />
             <span className="font-medium text-stone-300">
@@ -465,7 +465,7 @@ export const SpriteFusionPanel: React.FC<SpriteFusionPanelProps> = ({
                   rows={2}
                   value={customPrompt}
                   onChange={(e) => setCustomPrompt(e.target.value)}
-                  className="w-full rounded-lg border border-stone-700 bg-stone-900 p-2.5 text-xs text-white placeholder-stone-500 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border border-stone-700 bg-stone-900 p-2.5 text-sm sm:text-xs text-white placeholder-stone-500 focus:border-indigo-500 focus:outline-none"
                   placeholder="Enter pixel art prompt for Sprite Fusion..."
                 />
 

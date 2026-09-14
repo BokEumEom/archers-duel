@@ -1,5 +1,5 @@
-import React, { useEffect, useRef } from 'react';
-import { GameState, ArcherState, Arrow, WindState, MatchStats, Difficulty, Particle, EnemyDesignId } from '../types';
+import React, { useEffect, useRef, useMemo } from 'react';
+import { GameState, ArcherState, Arrow, WindState, MatchStats, Difficulty, Particle, EnemyDesignId, ScreenScale } from '../types';
 import { drawArcher, drawArrow, drawScenery, drawOakLeaf, GBA_PALETTE } from '../graphics/sprites';
 
 interface GbaScreenProps {
@@ -25,6 +25,7 @@ interface GbaScreenProps {
   playerCustomImage?: HTMLImageElement | null;
   enemyCustomImage?: HTMLImageElement | null;
   onCanvasClick?: () => void;
+  screenScale?: ScreenScale;
 }
 
 export const GbaScreen: React.FC<GbaScreenProps> = ({
@@ -50,6 +51,7 @@ export const GbaScreen: React.FC<GbaScreenProps> = ({
   playerCustomImage,
   enemyCustomImage,
   onCanvasClick,
+  screenScale = 'AUTO',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const frameTickRef = useRef<number>(0);
@@ -130,61 +132,6 @@ export const GbaScreen: React.FC<GbaScreenProps> = ({
         ctx.fillStyle = p.color;
         ctx.fillRect(p.x - cameraX, p.y - cameraY, p.size, p.size);
       }
-
-      // Draw HUD
-      drawBattleHud(ctx, player, enemy, stats, wind, turn, difficulty, gameState, enemyDesign, isScouting);
-
-      // Draw Scouting Mode Indicator Banner
-      if (isScouting) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
-        ctx.fillRect(30, 24, W - 60, 14);
-        ctx.strokeStyle = GBA_PALETTE.uiGold;
-        ctx.lineWidth = 1;
-        ctx.strokeRect(30, 24, W - 60, 14);
-
-        ctx.font = 'bold 7px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = GBA_PALETTE.uiGold;
-        ctx.fillText('◄ SCOUTING FOE • RELEASE [R] TO RETURN ►', W / 2, 34);
-      }
-
-      // Draw Round Intro Notice (briefly shows opponent & range at round start)
-      if (roundIntroNotice && !bannerText) {
-        ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
-        ctx.fillRect(20, 50, W - 40, 26);
-        ctx.strokeStyle = GBA_PALETTE.uiGold;
-        ctx.lineWidth = 1.5;
-        ctx.strokeRect(20, 50, W - 40, 26);
-
-        ctx.font = 'bold 8px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = GBA_PALETTE.uiGold;
-        ctx.fillText(roundIntroNotice, W / 2, 62);
-
-        ctx.font = '6px monospace';
-        ctx.fillStyle = '#cbd5e1';
-        ctx.fillText('HOLD [R] TO SCOUT ENEMY DISTANCE', W / 2, 71);
-      }
-
-      // Draw floating combat banner (HEADSHOT, BODY HIT, MISS, ROUND WON)
-      if (bannerText) {
-        drawBanner(ctx, bannerText, bannerColor);
-      }
-
-      // Overlay for Round Over
-      if (gameState === 'ROUND_OVER') {
-        renderRoundOverOverlay(ctx, stats, tick);
-      }
-
-      // Overlay for Match Over
-      if (gameState === 'MATCH_OVER') {
-        renderMatchOverOverlay(ctx, stats, tick);
-      }
-
-      // Overlay for Pause Menu
-      if (gameState === 'PAUSED') {
-        renderPauseMenu(ctx, pauseMenuIndex, difficulty);
-      }
     }
   }, [
     gameState,
@@ -209,31 +156,380 @@ export const GbaScreen: React.FC<GbaScreenProps> = ({
     enemyCustomImage,
   ]);
 
+  const screenMaxWidthClass = useMemo(() => {
+    if (screenScale === '2X') return 'max-w-[480px]';
+    if (screenScale === '3X') return 'max-w-[720px]';
+    if (screenScale === '4X') return 'max-w-[960px]';
+    // AUTO: Scaled gracefully from small mobile up to high-resolution PC displays
+    return 'max-w-[280px] min-[360px]:max-w-[320px] min-[400px]:max-w-[360px] min-[480px]:max-w-[460px] sm:max-w-[540px] md:max-w-[680px] lg:max-w-[800px] xl:max-w-[920px] 2xl:max-w-[980px]';
+  }, [screenScale]);
+
+  const distance = Math.round(enemy.x - player.x);
+  const enemyTitle = enemyDesign === 'STAG_HELM' ? 'STAG KNIGHT' :
+                     enemyDesign === 'SHADOW_RANGER' ? 'SHADOW RANGER' :
+                     enemyDesign === 'TEUTONIC_KNIGHT' ? 'TEUTONIC FOE' : 'CHAMPION';
+
+  const pauseMenuItems = [
+    'RESUME',
+    'RESTART MATCH',
+    `DIFFICULTY: ${difficulty}`,
+    'TITLE SCREEN',
+  ];
+
   return (
-    <div className="relative inline-block select-none overflow-hidden rounded-md border-2 border-stone-800 bg-black shadow-2xl">
+    <div className={`relative flex w-full select-none items-center justify-center overflow-hidden rounded-lg sm:rounded-xl border-2 sm:border-4 border-stone-800 bg-black shadow-2xl aspect-[3/2] transition-all duration-200 ${screenMaxWidthClass}`}>
+      {/* Retro 60FPS Pixel-Art Canvas (Scenery, Archers, Bow Animation, Arrow Physics, Trails, Particles) */}
       <canvas
         ref={canvasRef}
         width={240}
         height={160}
         onClick={onCanvasClick}
-        className="block h-[320px] w-[480px] cursor-pointer [image-rendering:pixelated] sm:h-[360px] sm:w-[540px] md:h-[400px] md:w-[600px]"
+        className="block h-full w-full cursor-pointer object-contain [image-rendering:pixelated]"
         id="gba-viewport-canvas"
       />
-      {/* Optional CRT / GBA LCD scanline grid filter */}
+
+      {/* Optional CRT / GBA LCD scanline grid filter applied over game graphics */}
       {crtFilter && (
         <div
           aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-30 mix-blend-overlay"
+          className="pointer-events-none absolute inset-0 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.25)_50%)] bg-[length:100%_4px] opacity-20"
         />
+      )}
+
+      {/* ========================================================================= */}
+      {/* CRISP IN-GAME UI OVERLAY (Zero blur, high readability, inside game screen) */}
+      {/* ========================================================================= */}
+
+      {/* 1. TITLE SCREEN OVERLAY */}
+      {gameState === 'TITLE' && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-between p-3 sm:p-5 md:p-6 bg-slate-950/40">
+          <div className="pt-2 sm:pt-4 text-center">
+            <h1 className="font-mono text-base min-[380px]:text-lg sm:text-2xl md:text-3xl font-black tracking-widest text-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.9)]">
+              ARCHER'S DUEL
+            </h1>
+            <p className="font-mono text-[8px] min-[380px]:text-[10px] sm:text-xs text-slate-300 font-semibold tracking-wider drop-shadow-md">
+              GAME BOY ADVANCE MEDIEVAL COMBAT
+            </p>
+          </div>
+
+          <div className="flex flex-col items-center gap-1.5 sm:gap-2 text-center">
+            <div className="font-mono text-[10px] min-[380px]:text-xs sm:text-sm md:text-base font-black tracking-wider text-white animate-pulse drop-shadow-[0_2px_4px_rgba(0,0,0,1)] bg-slate-950/80 px-3 py-1 rounded border border-amber-400/60">
+              ► PRESS A TO START ◄
+            </div>
+            <div className="font-mono text-[9px] min-[380px]:text-[11px] sm:text-xs font-bold text-amber-300 bg-slate-900/80 px-2 py-0.5 rounded border border-slate-700">
+              DIFFICULTY: [ {difficulty} ]
+            </div>
+          </div>
+
+          <div className="pb-1 text-center font-mono text-[7px] min-[380px]:text-[8px] sm:text-[10px] text-slate-400">
+            <span>SELECT: INSTRUCTIONS • BEST OF THREE DUEL</span>
+          </div>
+        </div>
+      )}
+
+      {/* 2. INSTRUCTIONS SCREEN OVERLAY */}
+      {gameState === 'INSTRUCTIONS' && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-3 sm:p-5 md:p-6 bg-slate-950/95 border-2 border-amber-400/80">
+          <div className="text-center">
+            <h2 className="font-mono text-xs min-[380px]:text-sm sm:text-base md:text-lg font-black text-amber-400 tracking-wider">
+              HOW TO PLAY ARCHER'S DUEL
+            </h2>
+          </div>
+
+          <div className="space-y-1 sm:space-y-1.5 font-mono text-[8px] min-[380px]:text-[9px] sm:text-xs md:text-sm text-slate-200">
+            <p><span className="text-amber-300 font-bold">• D-PAD ▲ / ▼:</span> Adjust Shot Angle (10° - 85°)</p>
+            <p><span className="text-amber-300 font-bold">• D-PAD ◄ / ►:</span> Adjust Shot Power (10% - 100%)</p>
+            <p><span className="text-emerald-400 font-bold">• A BUTTON:</span> Shoot Arrow</p>
+            <p><span className="text-cyan-300 font-bold">• HOLD R BUTTON:</span> Scout foe position & range ahead</p>
+            <p><span className="text-sky-300 font-bold">• IN-GAME WIND METER:</span> Watch wind drift at bottom of screen!</p>
+            <p><span className="text-rose-400 font-bold">• HEADSHOTS:</span> Strike the enemy helm for 55 Critical DMG</p>
+            <p><span className="text-yellow-400 font-bold">• BEST OF THREE:</span> First archer to win 2 rounds triumphs!</p>
+          </div>
+
+          <div className="text-center font-mono text-[9px] min-[380px]:text-[10px] sm:text-xs font-black text-amber-400 animate-pulse">
+            PRESS A OR B TO RETURN
+          </div>
+        </div>
+      )}
+
+      {/* 3. BATTLE IN-GAME HUD & PERSISTENT VISUAL WIND METER */}
+      {gameState !== 'TITLE' && gameState !== 'INSTRUCTIONS' && (
+        <div className="pointer-events-none absolute inset-0 flex flex-col justify-between p-1 sm:p-1.5 md:p-2 z-20">
+          {/* Top In-Game Bar (HP, Score, Range) */}
+          <div className="w-full rounded border border-slate-700/80 bg-slate-950/90 px-1.5 py-0.5 sm:px-2.5 sm:py-1 backdrop-blur-sm shadow-md flex items-center justify-between">
+            {/* Player HP */}
+            <div className="flex items-center gap-1 sm:gap-2">
+              <div className="flex flex-col">
+                <span className="font-mono text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-black text-emerald-400 leading-none">
+                  YOU: {player.health} HP
+                </span>
+                <div className="mt-0.5 h-1.5 sm:h-2 md:h-2.5 w-14 min-[380px]:w-18 sm:w-24 md:w-32 rounded bg-slate-800 overflow-hidden border border-slate-700">
+                  <div
+                    className={`h-full transition-all duration-150 ${player.health > 30 ? 'bg-emerald-500' : 'bg-rose-500'}`}
+                    style={{ width: `${Math.max(0, (player.health / player.maxHealth) * 100)}%` }}
+                  />
+                </div>
+              </div>
+              {/* Player Win Pips */}
+              <div className="flex gap-0.5 sm:gap-1">
+                {[0, 1].map((pipIdx) => (
+                  <div
+                    key={pipIdx}
+                    className={`h-2 w-2 sm:h-2.5 sm:w-2.5 border border-amber-400/80 rounded-sm ${
+                      pipIdx < stats.playerScore ? 'bg-amber-400 shadow-[0_0_4px_#f59e0b]' : 'bg-slate-900'
+                    }`}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Center: Round & Distance */}
+            <div className="flex flex-col items-center font-mono leading-none">
+              <span className="text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-black text-amber-400 tracking-wider">
+                ROUND {stats.currentRound} • {distance} PACES
+              </span>
+              <span className="hidden min-[420px]:inline text-[7px] sm:text-[8px] md:text-[9px] text-slate-400 uppercase tracking-widest mt-0.5">
+                BEST OF THREE
+              </span>
+            </div>
+
+            {/* Enemy HP */}
+            <div className="flex items-center gap-1 sm:gap-2 justify-end">
+              {/* Enemy Win Pips */}
+              <div className="flex gap-0.5 sm:gap-1">
+                {[0, 1].map((pipIdx) => (
+                  <div
+                    key={pipIdx}
+                    className={`h-2 w-2 sm:h-2.5 sm:w-2.5 border border-amber-400/80 rounded-sm ${
+                      pipIdx < stats.enemyScore ? 'bg-amber-400 shadow-[0_0_4px_#f59e0b]' : 'bg-slate-900'
+                    }`}
+                  />
+                ))}
+              </div>
+              <div className="flex flex-col items-end">
+                <span className="font-mono text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-black text-rose-400 leading-none">
+                  {enemyTitle}: {enemy.health} HP
+                </span>
+                <div className="mt-0.5 h-1.5 sm:h-2 md:h-2.5 w-14 min-[380px]:w-18 sm:w-24 md:w-32 rounded bg-slate-800 overflow-hidden border border-slate-700">
+                  <div
+                    className={`h-full transition-all duration-150 ${enemy.health > 30 ? 'bg-rose-500' : 'bg-red-600'}`}
+                    style={{ width: `${Math.max(0, (enemy.health / enemy.maxHealth) * 100)}%` }}
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Center Floating Alerts (Scouting / Round Intro / Combat Banners) */}
+          <div className="flex flex-col items-center justify-center gap-1 my-auto">
+            {isScouting && (
+              <div className="rounded bg-slate-950/90 px-3 py-1 border border-amber-400 shadow-lg font-mono text-[9px] min-[380px]:text-[11px] sm:text-xs font-bold text-amber-300">
+                ◄ SCOUTING FOE • RELEASE [R] TO RETURN ►
+              </div>
+            )}
+
+            {roundIntroNotice && !bannerText && !isScouting && (
+              <div className="rounded bg-slate-950/90 px-3 py-1.5 border border-amber-400 shadow-xl flex flex-col items-center text-center font-mono">
+                <span className="text-[9px] min-[380px]:text-[11px] sm:text-xs font-black text-amber-400">{roundIntroNotice}</span>
+                <span className="text-[7px] min-[380px]:text-[8px] sm:text-[9px] text-slate-300 mt-0.5">HOLD [R] TO SCOUT ENEMY DISTANCE</span>
+              </div>
+            )}
+
+            {bannerText && (
+              <div
+                className="rounded px-3 py-1.5 font-mono text-[10px] min-[380px]:text-xs sm:text-sm md:text-base font-black tracking-wider shadow-2xl border-2"
+                style={{
+                  backgroundColor: 'rgba(15, 23, 42, 0.95)',
+                  borderColor: bannerColor,
+                  color: bannerColor,
+                  textShadow: '0 0 8px rgba(0,0,0,0.9)',
+                }}
+              >
+                {bannerText}
+              </div>
+            )}
+          </div>
+
+          {/* ===================================================================== */}
+          {/* BOTTOM IN-GAME CONTROL DECK: AIM, POWER & PERSISTENT VISUAL WIND METER */}
+          {/* ===================================================================== */}
+          <div className="w-full rounded border border-slate-700/80 bg-slate-950/95 px-1.5 py-1 sm:px-2.5 sm:py-1.5 backdrop-blur-md shadow-lg">
+            <div className="flex items-center justify-between gap-1 sm:gap-2">
+              {/* Left: Player Angle & Power */}
+              <div className="flex flex-col gap-0.5 min-w-[65px] min-[380px]:min-w-[80px] sm:min-w-[110px] md:min-w-[130px]">
+                <div className="flex items-center justify-between font-mono text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-bold text-slate-200 leading-none">
+                  <span>ANG: <span className="text-amber-300">{player.angle}°</span></span>
+                  <span className="text-[7px] min-[380px]:text-[8px] sm:text-[10px] text-slate-400">▲▼</span>
+                </div>
+                <div className="flex items-center gap-1 font-mono text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-bold text-slate-200 leading-none mt-0.5">
+                  <span>PWR: <span className="text-amber-400">{player.power}%</span></span>
+                  <div className="h-1.5 sm:h-2 flex-1 rounded bg-slate-800 overflow-hidden border border-slate-700">
+                    <div
+                      className="h-full bg-gradient-to-r from-amber-500 to-yellow-400 transition-all duration-75"
+                      style={{ width: `${player.power}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Center: PERSISTENT IN-GAME VISUAL WIND METER */}
+              <div className="flex-1 flex flex-col items-center px-1 sm:px-2">
+                {/* Numerical & Directional Readout */}
+                <div className="flex items-center gap-1 font-mono text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-extrabold leading-none">
+                  <span className="text-cyan-400 flex items-center gap-0.5">
+                    {wind.speed < 0 ? '◄' : wind.speed > 0 ? '►' : '•'}
+                    <span>WIND: {wind.displaySpeed} KTS</span>
+                  </span>
+                  <span className={`text-[7px] min-[380px]:text-[8px] sm:text-[9px] md:text-[10px] font-bold ${
+                    wind.speed > 0 ? 'text-teal-300' : wind.speed < 0 ? 'text-amber-300' : 'text-emerald-300'
+                  }`}>
+                    {wind.speed > 0 ? 'EAST (TAILWIND)' : wind.speed < 0 ? 'WEST (HEADWIND)' : 'CALM'}
+                  </span>
+                </div>
+
+                {/* Graphical Bi-Directional Graduated Gauge Bar */}
+                <div className="relative w-full max-w-[130px] min-[380px]:max-w-[170px] sm:max-w-[240px] md:max-w-[300px] h-1.5 min-[380px]:h-2 sm:h-2.5 rounded bg-slate-900 border border-slate-700 overflow-hidden my-0.5">
+                  {/* Center Zero Line */}
+                  <div className="absolute top-0 bottom-0 left-1/2 w-0.5 bg-amber-400 z-10 -translate-x-1/2" />
+                  {/* Left / Right Tick Divisions */}
+                  <div className="absolute top-0 bottom-0 left-1/4 w-px bg-slate-700 pointer-events-none" />
+                  <div className="absolute top-0 bottom-0 right-1/4 w-px bg-slate-700 pointer-events-none" />
+
+                  {/* Active Fill: Headwind (Left) */}
+                  {wind.speed < 0 && (
+                    <div
+                      className="absolute top-0 bottom-0 right-1/2 bg-gradient-to-l from-cyan-400 to-amber-400 transition-all duration-300 flex items-center justify-start pl-0.5"
+                      style={{ width: `${Math.min(50, (Math.abs(wind.speed) / 12) * 50)}%` }}
+                    >
+                      <span className="text-[6px] text-black font-black leading-none">◄</span>
+                    </div>
+                  )}
+
+                  {/* Active Fill: Tailwind (Right) */}
+                  {wind.speed > 0 && (
+                    <div
+                      className="absolute top-0 bottom-0 left-1/2 bg-gradient-to-r from-cyan-400 to-teal-300 transition-all duration-300 flex items-center justify-end pr-0.5"
+                      style={{ width: `${Math.min(50, (wind.speed / 12) * 50)}%` }}
+                    >
+                      <span className="text-[6px] text-black font-black leading-none">►</span>
+                    </div>
+                  )}
+
+                  {/* Calm Indicator */}
+                  {wind.speed === 0 && (
+                    <div className="absolute top-0.5 bottom-0.5 left-1/2 -translate-x-1/2 w-1.5 rounded-full bg-emerald-400 shadow-[0_0_4px_#34d399]" />
+                  )}
+                </div>
+
+                {/* Tactical Trajectory Advice */}
+                <div className="font-mono text-[7px] min-[380px]:text-[8px] sm:text-[9px] md:text-[10px] text-slate-400 leading-none">
+                  {isScouting ? (
+                    <span className="text-amber-400 font-bold animate-pulse">SCOUTING ENEMY POSITION</span>
+                  ) : (
+                    <span>{wind.speed > 0 ? 'Assists Arrow • [R] Hold Scout' : wind.speed < 0 ? 'Drags Arrow • [R] Hold Scout' : 'Zero Drift • [R] Hold Scout'}</span>
+                  )}
+                </div>
+              </div>
+
+              {/* Right: Turn Status & Prompts */}
+              <div className="text-right min-w-[65px] min-[380px]:min-w-[80px] sm:min-w-[110px] md:min-w-[130px] font-mono leading-none">
+                {turn === 'PLAYER' ? (
+                  <>
+                    <div className="text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-black text-emerald-400 tracking-wide">
+                      YOUR TURN! [A]
+                    </div>
+                    <div className="text-[7px] min-[380px]:text-[8px] sm:text-[9px] text-slate-300 mt-0.5">
+                      [▲▼]ANG [◄►]PWR
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="text-[8px] min-[380px]:text-[10px] sm:text-xs md:text-sm font-black text-rose-400 animate-pulse tracking-wide">
+                      ENEMY AIMING...
+                    </div>
+                    <div className="text-[7px] min-[380px]:text-[8px] sm:text-[9px] text-slate-400 mt-0.5">
+                      RANGE: {distance}p
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 4. ROUND OVER MODAL OVERLAY */}
+      {gameState === 'ROUND_OVER' && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4 bg-black/75 z-30">
+          <div className="w-full max-w-[220px] sm:max-w-[280px] rounded-lg border-2 border-amber-400 bg-slate-950/95 p-3 sm:p-4 text-center font-mono shadow-2xl">
+            <h3 className="text-xs sm:text-sm md:text-base font-black text-amber-400">
+              ROUND {stats.currentRound} CONCLUDED
+            </h3>
+            <p className="my-1.5 sm:my-2 text-[10px] sm:text-xs font-bold text-white">
+              MATCH SCORE: YOU {stats.playerScore} - {stats.enemyScore} CPU
+            </p>
+            <div className="mt-2 text-[9px] sm:text-xs font-black text-amber-300 animate-pulse">
+              ► PRESS A FOR NEXT ROUND ◄
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. MATCH OVER MODAL OVERLAY */}
+      {gameState === 'MATCH_OVER' && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-3 sm:p-4 bg-black/85 z-30">
+          <div className="w-full max-w-[240px] sm:max-w-[320px] rounded-lg border-2 border-amber-400 bg-slate-950/95 p-3 sm:p-4 text-center font-mono shadow-2xl">
+            <h3 className={`text-sm sm:text-base md:text-lg font-black ${stats.playerScore >= 2 ? 'text-amber-400' : 'text-rose-400'}`}>
+              {stats.playerScore >= 2 ? '★ VICTORY! ★' : '☠ DEFEAT ☠'}
+            </h3>
+            <p className="text-[9px] sm:text-xs text-slate-300 mt-0.5">
+              {stats.playerScore >= 2 ? 'YOU ARE THE ROYAL ARCHER CHAMPION!' : 'THE ENEMY KNIGHT PREVAILED IN THE DUEL'}
+            </p>
+
+            <div className="my-2 py-1.5 border-y border-slate-800 text-[8px] sm:text-[10px] text-slate-300 space-y-0.5">
+              <p>FINAL SCORE: {stats.playerScore} - {stats.enemyScore}</p>
+              <p>HEADSHOTS: {stats.playerHeadshots} | ACCURACY: {stats.playerShots > 0 ? Math.round((stats.playerHits / stats.playerShots) * 100) : 0}%</p>
+            </div>
+
+            <div className="mt-2 text-[9px] sm:text-xs font-black text-amber-400 animate-pulse">
+              ► PRESS A TO PLAY AGAIN ◄
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. PAUSE MENU MODAL OVERLAY */}
+      {gameState === 'PAUSED' && (
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4 bg-black/80 z-30">
+          <div className="w-full max-w-[200px] sm:max-w-[250px] rounded-lg border-2 border-amber-400 bg-slate-950/95 p-3 sm:p-4 text-center font-mono shadow-2xl">
+            <h3 className="text-xs sm:text-sm md:text-base font-black text-amber-400 mb-2">
+              PAUSED
+            </h3>
+            <div className="space-y-1 sm:space-y-1.5 text-left text-[9px] sm:text-xs font-bold">
+              {pauseMenuItems.map((item, idx) => (
+                <div
+                  key={idx}
+                  className={`px-2 py-0.5 rounded ${
+                    idx === pauseMenuIndex
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-400/60'
+                      : 'text-slate-400'
+                  }`}
+                >
+                  {idx === pauseMenuIndex ? `► ${item} ◄` : item}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
 };
 
 /**
- * Render GBA Title Screen
+ * Render GBA Title Screen (Pixel art castle & crossed bows background)
  */
-function renderTitleScreen(ctx: CanvasRenderingContext2D, tick: number, difficulty: Difficulty) {
+function renderTitleScreen(ctx: CanvasRenderingContext2D, tick: number, _difficulty: Difficulty) {
   const W = 240;
   const H = 160;
 
@@ -259,58 +555,24 @@ function renderTitleScreen(ctx: CanvasRenderingContext2D, tick: number, difficul
   ctx.strokeRect(6, 6, W - 12, H - 12);
   ctx.strokeRect(9, 9, W - 18, H - 18);
 
-  // Logo Banner / Crossed Bows
+  // Crossed longbows graphic
   const bounce = Math.sin(tick * 0.08) * 2;
   ctx.save();
-  ctx.translate(W / 2, 42 + bounce);
+  ctx.translate(W / 2, 48 + bounce);
 
-  // Crossed longbows graphic
   ctx.strokeStyle = GBA_PALETTE.playerBow;
   ctx.lineWidth = 2;
   ctx.beginPath();
   ctx.arc(-8, 0, 16, -Math.PI / 3, Math.PI / 3);
   ctx.arc(8, 0, 16, (2 * Math.PI) / 3, (4 * Math.PI) / 3);
   ctx.stroke();
-
-  // Title: ARCHER'S DUEL
-  ctx.font = 'bold 16px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#000000';
-  ctx.fillText("ARCHER'S DUEL", 1, 1);
-  ctx.fillStyle = GBA_PALETTE.uiGold;
-  ctx.fillText("ARCHER'S DUEL", 0, 0);
-
-  // Subtitle
-  ctx.font = '7px monospace';
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillText('GAME BOY ADVANCE MEDIEVAL COMBAT', 0, 12);
   ctx.restore();
-
-  // Flashing Start Prompt
-  const showPrompt = Math.floor(tick / 24) % 2 === 0;
-  if (showPrompt) {
-    ctx.font = 'bold 9px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('► PRESS A TO START ◄', W / 2, 94);
-  }
-
-  // Options & info
-  ctx.font = '8px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#cbd5e1';
-  ctx.fillText(`DIFFICULTY: [ ${difficulty} ]`, W / 2, 114);
-
-  ctx.fillStyle = '#64748b';
-  ctx.font = '7px monospace';
-  ctx.fillText('SELECT: INSTRUCTIONS | BEST OF THREE', W / 2, 130);
-  ctx.fillText('© 2026 ROYAL ARCHERY GUILD • GBA MODE 3', W / 2, 144);
 }
 
 /**
- * Render Instructions Screen
+ * Render Instructions Screen (Pixel art backdrop & gold frame)
  */
-function renderInstructionsScreen(ctx: CanvasRenderingContext2D, tick: number) {
+function renderInstructionsScreen(ctx: CanvasRenderingContext2D, _tick: number) {
   const W = 240;
   const H = 160;
 
@@ -319,43 +581,8 @@ function renderInstructionsScreen(ctx: CanvasRenderingContext2D, tick: number) {
 
   // Border
   ctx.strokeStyle = GBA_PALETTE.uiGold;
-  ctx.lineWidth = 1;
+  ctx.lineWidth = 2;
   ctx.strokeRect(6, 6, W - 12, H - 12);
-
-  ctx.font = 'bold 10px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = GBA_PALETTE.uiGold;
-  ctx.fillText('HOW TO PLAY ARCHER\'S DUEL', W / 2, 22);
-
-  ctx.font = '7px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#e2e8f0';
-
-  const lines = [
-    '• D-PAD UP / DOWN  : Adjust Angle (10° - 85°)',
-    '• D-PAD LEFT / RIGHT: Adjust Shot Power (10% - 100%)',
-    '• A BUTTON          : Shoot Arrow',
-    '• START BUTTON      : Pause Game / Options',
-    '',
-    '• WIND & GRAVITY    : Watch the wind vane at the bottom!',
-    '• HEADSHOTS         : Hit the enemy helmet for 55 DMG!',
-    '• BODY HIT / GRAZE  : Torso 28 DMG, Legs 16 DMG.',
-    '• BEST OF THREE     : First to win 2 rounds wins the duel.',
-  ];
-
-  let y = 38;
-  for (const line of lines) {
-    ctx.fillText(line, 14, y);
-    y += 11;
-  }
-
-  // Flashing return prompt
-  if (Math.floor(tick / 20) % 2 === 0) {
-    ctx.font = 'bold 8px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = GBA_PALETTE.uiGold;
-    ctx.fillText('PRESS A OR B TO RETURN', W / 2, 146);
-  }
 }
 
 /**
@@ -399,264 +626,4 @@ function drawWindDust(
   }
 }
 
-/**
- * Top & Bottom GBA HUD
- */
-function drawBattleHud(
-  ctx: CanvasRenderingContext2D,
-  player: ArcherState,
-  enemy: ArcherState,
-  stats: MatchStats,
-  wind: WindState,
-  turn: 'PLAYER' | 'ENEMY',
-  difficulty: Difficulty,
-  gameState: GameState,
-  enemyDesign: EnemyDesignId = 'STAG_HELM',
-  isScouting: boolean = false
-) {
-  const W = 240;
-  const distance = Math.round(enemy.x - player.x);
 
-  // Top Bar Background
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.88)';
-  ctx.fillRect(0, 0, W, 20);
-
-  // Player Health Bar (Left)
-  ctx.font = 'bold 7px monospace';
-  ctx.textAlign = 'left';
-  ctx.fillStyle = GBA_PALETTE.uiGreen;
-  ctx.fillText(`YOU: ${player.health} HP`, 6, 9);
-
-  // Health Bar Frame
-  ctx.fillStyle = '#334155';
-  ctx.fillRect(6, 11, 55, 5);
-  ctx.fillStyle = player.health > 30 ? GBA_PALETTE.uiGreen : GBA_PALETTE.uiRed;
-  ctx.fillRect(6, 11, Math.max(0, (player.health / player.maxHealth) * 55), 5);
-
-  // Player Win Pips
-  drawPips(ctx, 65, 11, stats.playerScore, GBA_PALETTE.uiGold);
-
-  // Round & Range Indicator (Center)
-  ctx.font = 'bold 7px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = GBA_PALETTE.uiGold;
-  ctx.fillText(`RND ${stats.currentRound} • ${distance}p`, W / 2, 9);
-  ctx.font = '6px monospace';
-  ctx.fillStyle = '#94a3b8';
-  ctx.fillText(`BEST OF 3`, W / 2, 16);
-
-  // Enemy Name & Health Bar (Right)
-  const enemyTitle = enemyDesign === 'STAG_HELM' ? 'STAG KNIGHT' :
-                     enemyDesign === 'SHADOW_RANGER' ? 'SHADOW RANGER' :
-                     enemyDesign === 'TEUTONIC_KNIGHT' ? 'TEUTONIC FOE' : 'CHAMPION';
-  ctx.textAlign = 'right';
-  ctx.fillStyle = GBA_PALETTE.uiRed;
-  ctx.fillText(`${enemyTitle}: ${enemy.health} HP`, W - 6, 9);
-
-  ctx.fillStyle = '#334155';
-  ctx.fillRect(W - 61, 11, 55, 5);
-  ctx.fillStyle = enemy.health > 30 ? GBA_PALETTE.uiRed : '#ff0055';
-  ctx.fillRect(W - 61, 11, Math.max(0, (enemy.health / enemy.maxHealth) * 55), 5);
-
-  // Enemy Win Pips
-  drawPips(ctx, W - 78, 11, stats.enemyScore, GBA_PALETTE.uiGold);
-
-  // Bottom Control Panel HUD
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.90)';
-  ctx.fillRect(0, 138, W, 22);
-
-  // Angle Display
-  ctx.textAlign = 'left';
-  ctx.font = 'bold 7px monospace';
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillText(`ANG: ${player.angle}°`, 6, 147);
-
-  // Power Meter
-  ctx.fillText(`PWR: ${player.power}%`, 6, 156);
-  ctx.fillStyle = '#334155';
-  ctx.fillRect(48, 151, 35, 5);
-  ctx.fillStyle = GBA_PALETTE.uiGold;
-  ctx.fillRect(48, 151, (player.power / 100) * 35, 5);
-
-  // Wind Display (Center)
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#38bdf8';
-  let windArrow = '◄';
-  if (wind.speed > 0) windArrow = '►';
-  else if (wind.speed === 0) windArrow = '•';
-
-  ctx.fillText(`WIND ${windArrow} ${wind.displaySpeed} KTS`, W / 2, 147);
-  ctx.font = '6px monospace';
-  ctx.fillStyle = isScouting ? GBA_PALETTE.uiGold : '#94a3b8';
-  ctx.fillText(isScouting ? 'HOLD [R] SCOUTING' : '[R] HOLD TO SCOUT', W / 2, 156);
-
-  // Turn status prompt
-  ctx.textAlign = 'right';
-  ctx.font = 'bold 7px monospace';
-  if (gameState === 'BATTLE') {
-    if (turn === 'PLAYER') {
-      ctx.fillStyle = GBA_PALETTE.uiGreen;
-      ctx.fillText(`YOUR TURN! [A]`, W - 6, 147);
-      ctx.font = '6px monospace';
-      ctx.fillStyle = '#cbd5e1';
-      ctx.fillText(`[▲▼]ANG [◄►]PWR`, W - 6, 156);
-    } else {
-      ctx.fillStyle = GBA_PALETTE.uiRed;
-      ctx.fillText(`ENEMY AIMING...`, W - 6, 147);
-      ctx.font = '6px monospace';
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(`RANGE: ${distance} PACES`, W - 6, 156);
-    }
-  }
-}
-
-/**
- * Helper to draw win pip indicators (●○)
- */
-function drawPips(ctx: CanvasRenderingContext2D, x: number, y: number, wins: number, color: string) {
-  for (let i = 0; i < 2; i++) {
-    const px = x + i * 6;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = 1;
-    ctx.strokeRect(px, y, 4, 4);
-    if (i < wins) {
-      ctx.fillStyle = color;
-      ctx.fillRect(px + 1, y + 1, 2, 2);
-    }
-  }
-}
-
-/**
- * Draw Combat Banner (HEADSHOT, BODY HIT, MISS)
- */
-function drawBanner(ctx: CanvasRenderingContext2D, text: string, color: string) {
-  const W = 240;
-  ctx.save();
-  ctx.font = 'bold 11px monospace';
-  ctx.textAlign = 'center';
-
-  // Backdrop box
-  const tw = ctx.measureText(text).width + 16;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-  ctx.fillRect(W / 2 - tw / 2, 45, tw, 20);
-
-  ctx.strokeStyle = color;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(W / 2 - tw / 2, 45, tw, 20);
-
-  // Text shadow & glow
-  ctx.fillStyle = '#000';
-  ctx.fillText(text, W / 2 + 1, 59);
-  ctx.fillStyle = color;
-  ctx.fillText(text, W / 2, 58);
-  ctx.restore();
-}
-
-/**
- * Overlay for Round Over
- */
-function renderRoundOverOverlay(ctx: CanvasRenderingContext2D, stats: MatchStats, tick: number) {
-  const W = 240;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-  ctx.fillRect(30, 35, W - 60, 75);
-
-  ctx.strokeStyle = GBA_PALETTE.uiGold;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(30, 35, W - 60, 75);
-
-  const roundWinner = stats.playerScore > stats.enemyScore ? 'PLAYER' : 'ENEMY';
-  ctx.font = 'bold 10px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = GBA_PALETTE.uiGold;
-  ctx.fillText(`ROUND ${stats.currentRound} CONCLUDED`, W / 2, 52);
-
-  ctx.font = 'bold 9px monospace';
-  ctx.fillStyle = '#ffffff';
-  ctx.fillText(`MATCH SCORE: YOU ${stats.playerScore} - ${stats.enemyScore} CPU`, W / 2, 70);
-
-  if (Math.floor(tick / 20) % 2 === 0) {
-    ctx.font = 'bold 8px monospace';
-    ctx.fillStyle = GBA_PALETTE.uiGold;
-    ctx.fillText('PRESS A FOR NEXT ROUND', W / 2, 95);
-  }
-}
-
-/**
- * Overlay for Match Over
- */
-function renderMatchOverOverlay(ctx: CanvasRenderingContext2D, stats: MatchStats, tick: number) {
-  const W = 240;
-  ctx.fillStyle = 'rgba(15, 23, 42, 0.92)';
-  ctx.fillRect(20, 25, W - 40, 105);
-
-  ctx.strokeStyle = GBA_PALETTE.uiGold;
-  ctx.lineWidth = 2;
-  ctx.strokeRect(20, 25, W - 40, 105);
-
-  const playerWon = stats.playerScore >= 2;
-  ctx.font = 'bold 12px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = playerWon ? GBA_PALETTE.uiGold : GBA_PALETTE.uiRed;
-  ctx.fillText(playerWon ? '★ VICTORY! ★' : '☠ DEFEAT ☠', W / 2, 45);
-
-  ctx.font = '8px monospace';
-  ctx.fillStyle = '#e2e8f0';
-  ctx.fillText(
-    playerWon
-      ? 'YOU ARE THE ROYAL ARCHER CHAMPION!'
-      : 'THE ENEMY KNIGHT PREVAILED IN THE DUEL',
-    W / 2,
-    60
-  );
-
-  // Match stats
-  ctx.font = '7px monospace';
-  ctx.fillStyle = '#94a3b8';
-  const playerAcc = stats.playerShots > 0 ? Math.round((stats.playerHits / stats.playerShots) * 100) : 0;
-  ctx.fillText(`FINAL SCORE: ${stats.playerScore} - ${stats.enemyScore}`, W / 2, 75);
-  ctx.fillText(`HEADSHOTS: ${stats.playerHeadshots} | ACCURACY: ${playerAcc}%`, W / 2, 88);
-
-  if (Math.floor(tick / 20) % 2 === 0) {
-    ctx.font = 'bold 8px monospace';
-    ctx.fillStyle = GBA_PALETTE.uiGold;
-    ctx.fillText('PRESS A TO PLAY AGAIN', W / 2, 114);
-  }
-}
-
-/**
- * Overlay for Pause Menu
- */
-function renderPauseMenu(ctx: CanvasRenderingContext2D, selectedIdx: number, difficulty: Difficulty) {
-  const W = 240;
-  ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
-  ctx.fillRect(45, 30, W - 90, 85);
-
-  ctx.strokeStyle = GBA_PALETTE.uiGold;
-  ctx.lineWidth = 1.5;
-  ctx.strokeRect(45, 30, W - 90, 85);
-
-  ctx.font = 'bold 10px monospace';
-  ctx.textAlign = 'center';
-  ctx.fillStyle = GBA_PALETTE.uiGold;
-  ctx.fillText('PAUSED', W / 2, 46);
-
-  const items = [
-    'RESUME',
-    'RESTART MATCH',
-    `DIFFICULTY: ${difficulty}`,
-    'TITLE SCREEN',
-  ];
-
-  ctx.font = '8px monospace';
-  let y = 62;
-  items.forEach((item, idx) => {
-    if (idx === selectedIdx) {
-      ctx.fillStyle = GBA_PALETTE.uiGold;
-      ctx.fillText(`► ${item} ◄`, W / 2, y);
-    } else {
-      ctx.fillStyle = '#94a3b8';
-      ctx.fillText(item, W / 2, y);
-    }
-    y += 12;
-  });
-}
